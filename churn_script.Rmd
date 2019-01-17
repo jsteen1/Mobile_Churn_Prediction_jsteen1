@@ -1,0 +1,568 @@
+---
+title: "BA Project Exloration 2"
+author: "Jason Steen"
+date: "November 16, 2018"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+#### Library, read in data, levels, create training and evaluation datasets; install pROC and dplyr before running if not yet installed
+
+
+```{r}
+library(dplyr)
+library(pROC)
+inputdata <- read.csv("Churn_Train(1).csv")
+levels(inputdata$churn)
+index <- sample(1:3333, 889, replace=FALSE)
+trainingdata <- inputdata[-index, ]
+evaldata <- inputdata[index, ]
+```
+
+
+Generate index of random numbers to identify training and testing data.
+
+
+#### Summary of training data for comparison with eval data
+
+
+```{r}
+summary(trainingdata)
+```
+
+
+Churn rate 14.5%.
+
+
+#### Summary of eval data for comparison with training data
+
+
+```{r}
+summary(evaldata)
+```
+
+
+Churn rate 14.4%, very close to training data.
+
+
+#### Generate model
+
+
+```{r}
+model1 <- glm(churn~., data=trainingdata, family="binomial")
+summary(model1)
+```
+
+
+#### Evaluate model
+
+
+```{r}
+m1r <- predict(model1, newdata=trainingdata, type="response")
+roc(trainingdata$churn, m1r)
+m1b <- as.factor(m1r > 0.5)
+levels(m1b) <- list(no='FALSE', yes='TRUE')
+table(Predicted=m1b, True=trainingdata$churn)
+```
+
+False Negatives outweigh True Positives; AUROC curve inlfated as some of the 2444 observations are not incorporated into the model because of the NA values; NAs in attribute-values also yield NA classification results
+
+
+#### Summarize binary attributes
+
+
+```{r}
+table(Int_Plan=trainingdata$international_plan, Churn=trainingdata$churn)
+```
+
+
+Probability of churn given a member of intl plan = 101/(132+101) = 43.3%
+
+
+
+```{r}
+table(VM_Plan=trainingdata$voice_mail_plan, Churn=trainingdata$churn)
+```
+
+
+Probability of churn given no voicemail plan (16.45%) is approximately double the probability of churn given subscriber has a voicemail plan (9.3%).
+
+
+#### Visualize numerical attributes
+
+
+```{r}
+boxplot(number_customer_service_calls~churn, data=trainingdata, col=(c("cornflowerblue", "pink")), main="Number Customer Service Calls", xlab="Churn")
+```
+
+
+Number of customer service calls seems to be an indicator of churn
+
+
+
+```{r}
+boxplot(total_day_charge~churn, data=trainingdata, col=(c("cornflowerblue", "pink")), main="Amount Day Charge", xlab="Churn")
+```
+
+
+Day charges seem to be an indicator of churn
+
+
+```{r}
+boxplot(total_intl_calls~churn, data=trainingdata, col=(c("cornflowerblue", "pink")), main="Number International Calls", xlab="Churn")
+```
+
+
+Greater minimum threshold for churn. May or may not be significant.
+
+
+
+#### Variable Transformations and imputation of values for both training and eval data
+
+
+
+```{r}
+modtraining <- trainingdata
+modeval <- evaldata
+hist(trainingdata$total_day_minutes)
+modtraining$total_day_minutes[modtraining$total_day_minutes < 0] <- NA
+modtraining[is.na(modtraining$total_day_minutes), 'total_day_minutes'] <- mean(trainingdata$total_day_minutes, na.rm=TRUE)
+modtraining$total_day_minutes <- log1p(modtraining$total_day_minutes)
+hist(modtraining$total_day_minutes)
+modeval$total_day_minutes[modeval$total_day_minutes < 0] <- NA
+modeval[is.na(modeval$total_day_minutes), 'total_day_minutes'] <- mean(evaldata$total_day_minutes, na.rm=TRUE)
+modeval$total_day_minutes <- log1p(modeval$total_day_minutes)
+```
+
+
+Creating new dataframes for modification, allowing repopulation of the original, unmodified data if necessary. Designate all negative values as NA and impute mean values for NAs. Take logarithm of total day minutes, due to skewed nature of the data. Make the same modifications to the testing data as the eval data.
+
+
+```{r}
+hist(trainingdata$total_eve_minutes)
+modtraining$total_eve_minutes[modtraining$total_eve_minutes < 0] <- NA
+modtraining[is.na(modtraining$total_eve_minutes), 'total_eve_minutes'] <- mean(trainingdata$total_eve_minutes, na.rm=TRUE)
+modtraining$total_eve_minutes <- log1p(modtraining$total_eve_minutes)
+hist(modtraining$total_eve_minutes)
+modeval$total_eve_minutes[modeval$total_eve_minutes < 0] <- NA
+modeval[is.na(modeval$total_eve_minutes), 'total_eve_minutes'] <- mean(evaldata$total_eve_minutes, na.rm=TRUE)
+modeval$total_eve_minutes <- log1p(modeval$total_eve_minutes)
+```
+
+
+Similar transformation as day minutes.
+
+
+```{r}
+hist(trainingdata$total_night_minutes)
+modtraining$total_night_minutes[modtraining$total_night_minutes < 0] <- NA
+modtraining[is.na(modtraining$total_night_minutes), 'total_night_minutes'] <- mean(trainingdata$total_night_minutes, na.rm=TRUE)
+modtraining$total_night_minutes <- log1p(modtraining$total_night_minutes)
+hist(modtraining$total_night_minutes)
+modeval$total_night_minutes[modeval$total_night_minutes < 0] <- NA
+modeval[is.na(modeval$total_night_minutes), 'total_night_minutes'] <- mean(evaldata$total_night_minutes, na.rm=TRUE)
+modeval$total_night_minutes <- log1p(modeval$total_night_minutes)
+```
+
+
+Similar transformation as day minutes. Out of all of the minutes attributes, night minutes has the least skew. Transformation was necessary for feature generation using minute data.
+
+
+```{r}
+hist(trainingdata$total_intl_minutes)
+modtraining$total_intl_minutes[modtraining$total_intl_minutes < 0] <- NA
+modtraining[is.na(modtraining$total_intl_minutes), 'total_intl_minutes'] <- mean(trainingdata$total_intl_minutes, na.rm=TRUE)
+modtraining$total_intl_minutes <- log1p(modtraining$total_intl_minutes)
+hist(modtraining$total_intl_minutes)
+modeval$total_intl_minutes[modeval$total_intl_minutes < 0] <- NA
+modeval[is.na(modeval$total_intl_minutes), 'total_intl_minutes'] <- mean(evaldata$total_intl_minutes, na.rm=TRUE)
+modeval$total_intl_minutes <- log1p(modeval$total_intl_minutes)
+```
+
+
+Similar transformation as day minutes. Out of all of the minutes attributes, intl minutes has the least variance. Transformation was necessary for feature generation using minute data.
+
+
+```{r}
+hist(trainingdata$number_vmail_messages)
+modtraining$number_vmail_messages[modtraining$number_vmail_messages < 0] <- NA
+modtraining[is.na(modtraining$number_vmail_messages), 'number_vmail_messages'] <- mean(modtraining$number_vmail_messages, na.rm=TRUE)
+modtraining$number_vmail_messages <- log1p(modtraining$number_vmail_messages)
+hist(modtraining$number_vmail_messages)
+modeval$number_vmail_messages[modeval$number_vmail_messages < 0] <- NA
+modeval[is.na(modeval$number_vmail_messages), 'number_vmail_messages'] <- mean(modeval$number_vmail_messages, na.rm=TRUE)
+modeval$number_vmail_messages <- log1p(modeval$number_vmail_messages)
+```
+
+
+Ended up taking logarithm of this attribute after trying other transformations and no transformation.
+
+
+
+#### Logarithmic transformation considered but not used
+
+
+
+```{r}
+hist(trainingdata$account_length)
+modtraining$account_length[modtraining$account_length < 0] <- NA
+modtraining[is.na(modtraining$account_length), 'account_length'] <- mean(modtraining$account_length, na.rm=TRUE)
+hist(modtraining$account_length)
+modeval$account_length[modeval$account_length < 0] <- NA
+modeval[is.na(modeval$account_length), 'account_length'] <- mean(modeval$account_length, na.rm=TRUE)
+```
+
+
+Square or cube root gives more skewed results
+
+
+
+```{r}
+hist(trainingdata$number_customer_service_calls)
+modtraining$number_customer_service_calls[modtraining$number_customer_service_calls < 0] <- NA
+modtraining[is.na(modtraining$number_customer_service_calls), 'number_customer_service_calls'] <- mean(modtraining$number_customer_service_calls, na.rm=TRUE)
+hist(modtraining$number_customer_service_calls)
+modeval$number_customer_service_calls[modeval$number_customer_service_calls < 0] <- NA
+modeval[is.na(modeval$number_customer_service_calls), 'number_customer_service_calls'] <- mean(modeval$number_customer_service_calls, na.rm=TRUE)
+```
+
+
+Originally took cube root to yield more normally distributed data; removed and classification model improved!
+
+
+
+#### Impute missing values
+
+
+
+```{r}
+modtraining$total_day_calls[modtraining$total_day_calls < 0] <- NA
+modtraining[is.na(modtraining$total_day_calls), 'total_day_calls'] <- mean(modtraining$total_day_calls, na.rm=TRUE)
+modeval$total_day_calls[modeval$total_day_calls < 0] <- NA
+modeval[is.na(modeval$total_day_calls), 'total_day_calls'] <- mean(modeval$total_day_calls, na.rm=TRUE)
+print("complete")
+```
+
+
+```{r}
+modtraining$total_day_charge[modtraining$total_day_charge < 0] <- NA
+modtraining[is.na(modtraining$total_day_charge), 'total_day_charge'] <- mean(modtraining$total_day_charge, na.rm=TRUE)
+modeval$total_day_charge[modeval$total_day_charge < 0] <- NA
+modeval[is.na(modeval$total_day_charge), 'total_day_charge'] <- mean(modeval$total_day_charge, na.rm=TRUE)
+print("complete")
+```
+
+
+```{r}
+modtraining$total_eve_calls[modtraining$total_eve_calls < 0] <- NA
+modtraining[is.na(modtraining$total_eve_calls), 'total_eve_calls'] <- mean(modtraining$total_eve_calls, na.rm=TRUE)
+modeval$total_eve_calls[modeval$total_eve_calls < 0] <- NA
+modeval[is.na(modeval$total_eve_calls), 'total_eve_calls'] <- mean(modeval$total_eve_calls, na.rm=TRUE)
+print("complete")
+```
+
+
+
+
+```{r}
+modtraining$total_eve_charge[modtraining$total_eve_charge < 0] <- NA
+modtraining[is.na(modtraining$total_eve_charge), 'total_eve_charge'] <- mean(modtraining$total_eve_charge, na.rm=TRUE)
+modeval$total_eve_charge[modeval$total_eve_charge < 0] <- NA
+modeval[is.na(modeval$total_eve_charge), 'total_eve_charge'] <- mean(modeval$total_eve_charge, na.rm=TRUE)
+print("complete")
+```
+
+
+
+
+```{r}
+modtraining$total_night_charge[modtraining$total_night_charge < 0] <- NA
+modtraining[is.na(modtraining$total_night_charge), 'total_night_charge'] <- mean(modtraining$total_night_charge, na.rm=TRUE)
+modeval$total_night_charge[modeval$total_night_charge < 0] <- NA
+modeval[is.na(modeval$total_night_charge), 'total_night_charge'] <- mean(modeval$total_night_charge, na.rm=TRUE)
+print("complete")
+```
+
+
+
+
+```{r}
+modtraining$total_night_minutes[modtraining$total_night_minutes < 0] <- NA
+modtraining[is.na(modtraining$total_night_minutes), 'total_night_minutes'] <- mean(modtraining$total_night_minutes, na.rm=TRUE)
+modeval$total_night_minutes[modeval$total_night_minutes < 0] <- NA
+modeval[is.na(modeval$total_night_minutes), 'total_night_minutes'] <- mean(modeval$total_night_minutes,na.rm=TRUE)
+print("complete")
+```
+
+
+
+
+```{r}
+modtraining$total_intl_minutes[modtraining$total_intl_minutes < 0] <- NA
+modtraining[is.na(modtraining$total_intl_minutes), 'total_intl_minutes'] <- mean(modtraining$total_intl_minutes, na.rm=TRUE)
+modeval$total_intl_minutes[modeval$total_intl_minutes < 0] <- NA
+modeval[is.na(modeval$total_intl_minutes), 'total_intl_minutes'] <- mean(modeval$total_intl_minutes, na.rm=TRUE)
+print("complete")
+```
+
+
+
+
+```{r}
+modtraining$total_intl_calls[modtraining$total_intl_calls < 0] <- NA
+modtraining[is.na(modtraining$total_intl_calls), 'total_intl_calls'] <- mean(trainingdata$total_intl_calls, na.rm=TRUE)
+modeval$total_intl_calls[modeval$total_intl_calls < 0] <- NA
+modeval[is.na(modeval$total_intl_calls), 'total_intl_calls'] <- mean(evaldata$total_intl_calls, na.rm=TRUE)
+print("complete")
+```
+
+
+
+
+```{r}
+modtraining$total_intl_charge[modtraining$total_intl_charge < 0] <- NA
+modtraining[is.na(modtraining$total_intl_charge), 'total_intl_charge'] <- mean(modtraining$total_intl_charge, na.rm=TRUE)
+modeval$total_intl_charge[modeval$total_intl_charge < 0] <- NA
+modeval[is.na(modeval$total_intl_charge), 'total_intl_charge'] <- mean(modeval$total_intl_charge, na.rm=TRUE)
+print("complete")
+```
+
+
+
+#### New variable generation for training and eval data
+
+
+
+```{r}
+modtraining$product_cscall_daych <- (modtraining$number_customer_service_calls * modtraining$total_day_charge)
+modeval$product_cscall_daych <- (modeval$number_customer_service_calls * modeval$total_day_charge)
+print("complete")
+```
+
+
+Zstat for customer service calls is high and there is a difference in the distributions of calls for yes and no outcomes of churn. This is one of the most important attributes in the dataset for indication of churn. Day charges also have a reasonably high Zstat and provide a reason for customer churn. Multiplying the two together yields amplified measure of dissatisfaction. Squaring or cubing provided less predictive power.
+
+
+```{r}
+modtraining$product_cscall_evech <- (modtraining$number_customer_service_calls * modtraining$total_eve_charge)
+modeval$product_cscall_evech <- (modeval$number_customer_service_calls * modeval$total_eve_charge)
+print("complete")
+```
+
+
+Same for evening charges, though they are less significant than day charges.
+
+
+```{r}
+modtraining$product_cscall_nightch <- (modtraining$number_customer_service_calls * modtraining$total_night_charge)
+modeval$product_cscall_nightch <- (modeval$number_customer_service_calls * modeval$total_night_charge)
+print("complete")
+```
+
+
+Also decided to include night charge x # customer service calls.
+
+
+```{r}
+modtraining$product_cscall_intlch <- (modtraining$number_customer_service_calls * modtraining$total_intl_charge)
+modeval$product_cscall_intlch <- (modeval$number_customer_service_calls * modeval$total_intl_charge)
+print("complete")
+```
+
+
+Also decided to include intl charge x # customer service calls.
+
+
+
+
+```{r}
+modtraining$ratio_daytoallc <- modtraining$total_day_calls / (modtraining$total_day_calls + modtraining$total_eve_calls + modtraining$total_night_calls + modtraining$total_intl_calls)
+modeval$ratio_daytoallc <- modeval$total_day_calls / (modeval$total_day_calls + modeval$total_eve_calls + modeval$total_night_calls + modeval$total_intl_calls)
+print("complete")
+```
+
+
+Ratio of day calls to total calls. These ratios turn out to provide some predictive power.
+
+
+```{r}
+modtraining$ratio_evetoallc <- modtraining$total_eve_calls / (modtraining$total_day_calls + modtraining$total_eve_calls + modtraining$total_night_calls + modtraining$total_intl_calls)
+modeval$ratio_evetoallc <- modeval$total_eve_calls / (modeval$total_day_calls + modeval$total_eve_calls + modeval$total_night_calls + modeval$total_intl_calls)
+print("complete")
+```
+
+
+Ratio of evening calls to total calls.
+
+
+```{r}
+modtraining$ratio_nighttoallc <- modtraining$total_night_calls / (modtraining$total_day_calls + modtraining$total_eve_calls + modtraining$total_night_calls + modtraining$total_intl_calls)
+modeval$ratio_nighttoallc <- modeval$total_night_calls / (modeval$total_day_calls + modeval$total_eve_calls + modeval$total_night_calls + modeval$total_intl_calls)
+print("complete")
+```
+
+
+Ratio of night calls to total calls.
+
+
+```{r}
+modtraining$night_min_per_call <- modtraining$total_night_minutes/modtraining$total_night_calls
+modeval$night_min_per_call <- modeval$total_night_minutes/modeval$total_night_calls
+print("complete")
+```
+
+
+Ratio of day minutes to day calls yielding average length of daytime call. At first tried to use ratio of day minutes to total minutes but the predictive power was not there. Then sum of all minutes divided by minutes for specific time of day caused errors. Settled on this calculation for night and intl only, as the findings for day and evening were not significant.
+
+
+```{r}
+modtraining$intl_min_per_call <- modtraining$total_intl_minutes/modtraining$total_intl_calls
+modeval$intl_min_per_call <- modeval$total_intl_minutes/modeval$total_intl_calls
+print("complete")
+```
+
+
+Ratio of intl minutes to intl calls.
+
+
+
+#### Test new model !
+
+
+
+```{r}
+model2 <- glm(churn~., data=modtraining, family="binomial")
+summary(model2)
+```
+
+
+High Zstats and low pvalues. Here we go!
+
+
+```{r}
+m2r <- predict(model2, newdata=modtraining, type="response")
+roc(modtraining$churn, m2r)
+m2b <- as.factor(m2r > 0.5)
+levels(m2b) <- list(no='FALSE', yes='TRUE')
+table(Predicted=m2b, True=modtraining$churn)
+```
+
+
+Success! Highest AUC ROC yet! False negatives still outweigh true positives, though. 154 / 154 + 201 = 43.4% true positive rate.
+
+
+```{r}
+m2er <- predict(model2, newdata=modeval, type="response")
+roc(modeval$churn, m2er)
+m2eb <- as.factor(m2er > 0.5)
+levels(m2eb) <- list(no='FALSE', yes='TRUE')
+table(Predicted=m2eb, True=modeval$churn)
+```
+
+
+Only a 4% decrease when testing our model on unseen data.  Previous trials had a 14% decrease, most likely due to selecting sequential records for testing data. This is a pretty good result. False negatives still outweigh true positives 48 / 48 + 80 = 37.5% true positive rate.
+
+
+
+#### Save data to be classified and preprocess
+
+
+
+```{r}
+modtbc <-Customers_To_Predict
+  
+modtbc$total_day_minutes[modtbc$total_day_minutes < 0] <- NA
+modtbc[is.na(modtbc$total_day_minutes), 'total_day_minutes'] <- mean(modtbc$total_day_minutes, na.rm=TRUE)
+modtbc$total_day_minutes <- log1p(modtbc$total_day_minutes)
+
+modtbc$total_eve_minutes[modtbc$total_eve_minutes < 0] <- NA
+modtbc[is.na(modtbc$total_eve_minutes), 'total_eve_minutes'] <- mean(modtbc$total_eve_minutes, na.rm=TRUE)
+modtbc$total_eve_minutes <- log1p(modtbc$total_eve_minutes)
+
+modtbc$total_night_minutes[modtbc$total_night_minutes < 0] <- NA
+modtbc[is.na(modtbc$total_night_minutes), 'total_night_minutes'] <- mean(modtbc$total_night_minutes, na.rm=TRUE)
+modtbc$total_night_minutes <- log1p(modtbc$total_night_minutes)
+
+modtbc$total_intl_minutes[modtbc$total_intl_minutes < 0] <- NA
+modtbc[is.na(modtbc$total_intl_minutes), 'total_intl_minutes'] <- mean(modtbc$total_intl_minutes, na.rm=TRUE)
+modtbc$total_intl_minutes <- log1p(modtbc$total_intl_minutes)
+
+modtbc$number_vmail_messages[modtbc$number_vmail_messages < 0] <- NA
+modtbc[is.na(modtbc$number_vmail_messages), 'number_vmail_messages'] <- mean(modtbc$number_vmail_messages, na.rm=TRUE)
+modtbc$number_vmail_messages <- log1p(modtbc$number_vmail_messages)
+
+modtbc$account_length[modtbc$account_length < 0] <- NA
+modtbc[is.na(modtbc$account_length), 'account_length'] <- mean(modtbc$account_length, na.rm=TRUE)
+
+modtbc$number_customer_service_calls[modtbc$number_customer_service_calls < 0] <- NA
+modtbc[is.na(modtbc$number_customer_service_calls), 'number_customer_service_calls'] <- mean(modtbc$number_customer_service_calls, na.rm=TRUE)
+
+modtbc$total_day_calls[modtbc$total_day_calls < 0] <- NA
+modtbc[is.na(modtbc$total_day_calls), 'total_day_calls'] <- mean(modtbc$total_day_calls, na.rm=TRUE)
+
+modtbc$total_day_charge[modtbc$total_day_charge < 0] <- NA
+modtbc[is.na(modtbc$total_day_charge), 'total_day_charge'] <- mean(modtbc$total_day_charge, na.rm=TRUE)
+
+modtbc$total_eve_calls[modtbc$total_eve_calls < 0] <- NA
+modtbc[is.na(modtbc$total_eve_calls), 'total_eve_calls'] <- mean(modtbc$total_eve_calls, na.rm=TRUE)
+
+modtbc$total_eve_charge[modtbc$total_eve_charge < 0] <- NA
+modtbc[is.na(modtbc$total_eve_charge), 'total_eve_charge'] <- mean(modtbc$total_eve_charge, na.rm=TRUE)
+
+modtbc$total_night_calls[modtbc$total_night_calls < 0] <- NA
+modtbc[is.na(modtbc$total_night_calls), 'total_night_calls'] <- mean(modtbc$total_night_calls, na.rm=TRUE)
+
+modtbc$total_night_charge[modtbc$total_night_charge < 0] <- NA
+modtbc[is.na(modtbc$total_night_charge), 'total_night_charge'] <- mean(modtbc$total_night_charge, na.rm=TRUE)
+
+modtbc$total_intl_calls[modtbc$total_intl_calls < 0] <- NA
+modtbc[is.na(modtbc$total_intl_calls), 'total_intl_calls'] <- mean(modtbc$total_intl_calls, na.rm=TRUE)
+
+modtbc$total_intl_charge[modtbc$total_intl_charge < 0] <- NA
+modtbc[is.na(modtbc$total_intl_charge), 'total_intl_charge'] <- mean(modtbc$total_intl_charge, na.rm=TRUE)
+```
+
+
+
+#### Create new variables for data to be classified
+
+
+
+```{r}
+modtbc$product_cscall_daych <- (modtbc$number_customer_service_calls * modtbc$total_day_charge)
+
+modtbc$product_cscall_evech <- (modtbc$number_customer_service_calls * modtbc$total_eve_charge)
+
+modtbc$product_cscall_nightch <- (modtbc$number_customer_service_calls * modtbc$total_night_charge)
+
+modtbc$product_cscall_intlch <- (modtbc$number_customer_service_calls * modtbc$total_intl_charge)
+
+modtbc$ratio_daytoallc <- modtbc$total_day_calls / (modtbc$total_day_calls + modtbc$total_eve_calls + modtbc$total_night_calls + modtbc$total_intl_calls)
+
+modtbc$ratio_evetoallc <- modtbc$total_eve_calls / (modtbc$total_day_calls + modtbc$total_eve_calls + modtbc$total_night_calls + modtbc$total_intl_calls)
+
+modtbc$ratio_nighttoallc <- modtbc$total_night_calls / (modtbc$total_day_calls + modtbc$total_eve_calls + modtbc$total_night_calls + modtbc$total_intl_calls)
+
+modtbc$night_min_per_call <- modtbc$total_night_minutes/modtbc$total_night_calls
+
+modtbc$intl_min_per_call <- modtbc$total_intl_minutes/modtbc$total_intl_calls
+```
+
+
+
+#### Classify new data
+
+
+
+```{r}
+modtbc$DATA_HAS_BEEN_CLASSIFIED <- predict(model2, newdata=modtbc, type="response")
+Customers_To_Predict$DATA_HAS_BEEN_CLASSIFIED <- modtbc$DATA_HAS_BEEN_CLASSIFIED
+```
+
+
+Predictions exists in both Customers to Predict and modtbc dataframes.
+
